@@ -1,0 +1,48 @@
+grpc:
+  port: 50051
+  host: "0.0.0.0"
+  tls:
+    enabled: true
+    cert_file: "/certs/agent.crt"
+    key_file: "/certs/agent.key"
+    ca_file: "/certs/ca.crt"
+
+http:
+  port: 8080
+
+nginx:
+  config_path: "/etc/nginx"
+  sites_path: "/etc/nginx/sites-available"
+  reload_command: "nginx -s reload"
+
+ssl:
+  cert_path: "/etc/ssl/certs"
+  key_path: "/etc/ssl/private"
+  letsencrypt:
+    email: "admin@example.com"
+    staging: false
+
+database:
+  mysql:
+    host: "localhost"
+    port: 3306
+    username: "root"
+    password: "password"
+  postgresql:
+    host: "localhost"
+    port: 5432
+    username: "postgres"
+    password: "password"
+
+backup:
+  storage_path: "/var/backups"
+  s3:
+    endpoint: "https://s3.amazonaws.com"
+    bucket: "hosting-panel-backups"
+    access_key: ""
+    secret_key: ""
+    region: "us-east-1"
+
+logging:
+  level: "info"
+  format: "json"

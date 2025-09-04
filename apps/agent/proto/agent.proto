@@ -1,0 +1,138 @@
+syntax = "proto3";
+
+package agent;
+
+option go_package = "hosting-panel-agent/proto";
+
+service AgentService {
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+  rpc GetMetrics(GetMetricsRequest) returns (GetMetricsResponse);
+  rpc CreateSite(CreateSiteRequest) returns (CreateSiteResponse);
+  rpc DeleteSite(DeleteSiteRequest) returns (DeleteSiteResponse);
+  rpc EnableSSL(EnableSSLRequest) returns (EnableSSLResponse);
+  rpc DisableSSL(DisableSSLRequest) returns (DisableSSLResponse);
+  rpc CreateDatabase(CreateDatabaseRequest) returns (CreateDatabaseResponse);
+  rpc DeleteDatabase(DeleteDatabaseRequest) returns (DeleteDatabaseResponse);
+  rpc CreateBackup(CreateBackupRequest) returns (CreateBackupResponse);
+  rpc RestoreBackup(RestoreBackupRequest) returns (RestoreBackupResponse);
+  rpc ListBackups(ListBackupsRequest) returns (ListBackupsResponse);
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  bool healthy = 1;
+  string message = 2;
+}
+
+message GetMetricsRequest {}
+
+message GetMetricsResponse {
+  SystemMetrics metrics = 1;
+}
+
+message SystemMetrics {
+  double cpu_usage = 1;
+  double memory_usage = 2;
+  double disk_usage = 3;
+  int64 bandwidth = 4;
+  int64 uptime = 5;
+}
+
+message CreateSiteRequest {
+  string domain = 1;
+  string document_root = 2;
+  string php_version = 3;
+  string node_version = 4;
+}
+
+message CreateSiteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteSiteRequest {
+  string domain = 1;
+}
+
+message DeleteSiteResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message EnableSSLRequest {
+  string domain = 1;
+  string cert = 2;
+  string key = 3;
+}
+
+message EnableSSLResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DisableSSLRequest {
+  string domain = 1;
+}
+
+message DisableSSLResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateDatabaseRequest {
+  string name = 1;
+  string username = 2;
+  string password = 3;
+  string type = 4;
+}
+
+message CreateDatabaseResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteDatabaseRequest {
+  string name = 1;
+  string type = 2;
+}
+
+message DeleteDatabaseResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message CreateBackupRequest {
+  string name = 1;
+  string type = 2;
+  string path = 3;
+}
+
+message CreateBackupResponse {
+  bool success = 1;
+  string message = 2;
+  string backup_path = 3;
+}
+
+message RestoreBackupRequest {
+  string backup_path = 1;
+  string target_path = 2;
+}
+
+message RestoreBackupResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListBackupsRequest {}
+
+message ListBackupsResponse {
+  repeated BackupInfo backups = 1;
+}
+
+message BackupInfo {
+  string name = 1;
+  string path = 2;
+  int64 size = 3;
+  int64 created_at = 4;
+}
