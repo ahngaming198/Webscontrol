@@ -1,0 +1,342 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  OWNER
+  ADMIN
+  SUPPORT
+  CLIENT
+}
+
+enum LicenseTier {
+  COMMUNITY
+  PREMIUM
+  ENTERPRISE
+}
+
+enum ServerStatus {
+  ONLINE
+  OFFLINE
+  MAINTENANCE
+  ERROR
+}
+
+enum SiteStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum BackupStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      UserRole @default(CLIENT)
+  isActive  Boolean  @default(true)
+  isVerified Boolean @default(false)
+  twoFactorSecret String?
+  twoFactorEnabled Boolean @default(false)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  
+  apiKeys        ApiKey[]
+  sessions       Session[]
+  tickets        Ticket[]
+  ticketReplies  TicketReply[]
+  sites          Site[]
+  backups        Backup[]
+  invoices       Invoice[]
+
+  @@map("users")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  domain      String?
+  isActive    Boolean  @default(true)
+  licenseKey  String?  @unique
+  licenseTier LicenseTier @default(COMMUNITY)
+  licenseExpiresAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  users       User[]
+  servers     Server[]
+  sites       Site[]
+  databases   Database[]
+  invoices    Invoice[]
+
+  @@map("organizations")
+}
+
+model Server {
+  id          String       @id @default(cuid())
+  name        String
+  hostname    String       @unique
+  ipAddress   String
+  port        Int          @default(22)
+  status      ServerStatus @default(OFFLINE)
+  agentToken  String       @unique
+  lastSeen    DateTime?
+  cpuUsage    Float?
+  memoryUsage Float?
+  diskUsage   Float?
+  bandwidth   BigInt?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  // Relations
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  sites          Site[]
+  databases      Database[]
+  backups        Backup[]
+  metrics        ServerMetric[]
+
+  @@map("servers")
+}
+
+model ServerMetric {
+  id        String   @id @default(cuid())
+  timestamp DateTime @default(now())
+  cpuUsage  Float
+  memoryUsage Float
+  diskUsage Float
+  bandwidth BigInt
+
+  // Relations
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id])
+
+  @@map("server_metrics")
+}
+
+model Site {
+  id          String     @id @default(cuid())
+  domain      String     @unique
+  status      SiteStatus @default(PENDING)
+  sslEnabled  Boolean    @default(false)
+  sslCert     String?
+  sslKey      String?
+  sslExpiresAt DateTime?
+  documentRoot String
+  phpVersion  String?
+  nodeVersion String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  serverId     String
+  server       Server     @relation(fields: [serverId], references: [id])
+  databases    Database[]
+  backups      Backup[]
+
+  @@map("sites")
+}
+
+model Database {
+  id       String @id @default(cuid())
+  name     String
+  username String
+  password String
+  type     String // mysql, postgresql
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  serverId       String
+  server         Server       @relation(fields: [serverId], references: [id])
+  siteId         String?
+  site           Site?        @relation(fields: [siteId], references: [id])
+
+  @@map("databases")
+}
+
+model Backup {
+  id          String      @id @default(cuid())
+  name        String
+  type        String      // site, database, full
+  status      BackupStatus @default(PENDING)
+  size        BigInt?
+  path        String?
+  s3Key       String?
+  startedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  userId       String
+  user         User       @relation(fields: [userId], references: [id])
+  organizationId String
+  organization Organization @relation(fields: [organizationId], references: [id])
+  serverId     String
+  server       Server     @relation(fields: [serverId], references: [id])
+  siteId       String?
+  site         Site?      @relation(fields: [siteId], references: [id])
+
+  @@map("backups")
+}
+
+model ApiKey {
+  id        String   @id @default(cuid())
+  name      String
+  key       String   @unique
+  isActive  Boolean  @default(true)
+  lastUsed  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("api_keys")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  ipAddress String?
+  userAgent String?
+  isActive  Boolean  @default(true)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  @@map("sessions")
+}
+
+model Ticket {
+  id          String         @id @default(cuid())
+  subject     String
+  description String
+  status      TicketStatus   @default(OPEN)
+  priority    TicketPriority @default(MEDIUM)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  // Relations
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+  replies TicketReply[]
+
+  @@map("tickets")
+}
+
+model TicketReply {
+  id        String   @id @default(cuid())
+  message   String
+  isInternal Boolean @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  ticketId String
+  ticket   Ticket @relation(fields: [ticketId], references: [id])
+  userId   String
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@map("ticket_replies")
+}
+
+model Invoice {
+  id          String   @id @default(cuid())
+  number      String   @unique
+  amount      Decimal
+  currency    String   @default("USD")
+  status      String   // pending, paid, failed, cancelled
+  dueDate     DateTime
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@map("invoices")
+}
+
+model KnowledgeBaseArticle {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  slug        String   @unique
+  isPublished Boolean  @default(false)
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  categoryId String?
+  category   KnowledgeBaseCategory? @relation(fields: [categoryId], references: [id])
+
+  @@map("knowledge_base_articles")
+}
+
+model KnowledgeBaseCategory {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  articles KnowledgeBaseArticle[]
+
+  @@map("knowledge_base_categories")
+}
