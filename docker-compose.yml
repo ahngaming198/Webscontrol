@@ -1,0 +1,149 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: hosting-panel-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hosting_panel
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - hosting-panel
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: hosting-panel-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - hosting-panel
+
+  # Meilisearch (for helpdesk search)
+  meilisearch:
+    image: getmeili/meilisearch:v1.5
+    container_name: hosting-panel-meilisearch
+    restart: unless-stopped
+    environment:
+      MEILI_MASTER_KEY: ${MEILISEARCH_API_KEY:-your-meilisearch-key}
+      MEILI_ENV: production
+    volumes:
+      - meilisearch_data:/meili_data
+    ports:
+      - "7700:7700"
+    networks:
+      - hosting-panel
+
+  # Control Plane (NestJS Backend)
+  control-plane:
+    build:
+      context: ./apps/control-plane
+      dockerfile: Dockerfile
+    container_name: hosting-panel-control-plane
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/hosting_panel
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-this-in-production}
+      JWT_EXPIRES_IN: 7d
+      SMTP_HOST: ${SMTP_HOST:-smtp.gmail.com}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-your-email@gmail.com}
+      SMTP_PASS: ${SMTP_PASS:-your-app-password}
+      SMTP_FROM: ${SMTP_FROM:-noreply@yourdomain.com}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-your-access-key}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-your-secret-key}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      AWS_S3_BUCKET: ${AWS_S3_BUCKET:-hosting-panel-backups}
+      AWS_S3_ENDPOINT: ${AWS_S3_ENDPOINT:-https://s3.amazonaws.com}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:-admin@yourdomain.com}
+      LETSENCRYPT_STAGING: ${LETSENCRYPT_STAGING:-false}
+      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-your-license-public-key}
+      LICENSE_PRIVATE_KEY: ${LICENSE_PRIVATE_KEY:-your-license-private-key}
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-your-meilisearch-key}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - redis
+      - meilisearch
+    networks:
+      - hosting-panel
+    volumes:
+      - ./certs:/certs:ro
+
+  # Client Portal (Next.js Frontend)
+  client-portal:
+    build:
+      context: ./apps/client-portal
+      dockerfile: Dockerfile
+    container_name: hosting-panel-client-portal
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${APP_URL:-http://localhost:3000}
+    ports:
+      - "3001:3000"
+    depends_on:
+      - control-plane
+    networks:
+      - hosting-panel
+
+  # Helpdesk (Next.js Helpdesk)
+  helpdesk:
+    build:
+      context: ./apps/helpdesk
+      dockerfile: Dockerfile
+    container_name: hosting-panel-helpdesk
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${APP_URL:-http://localhost:3000}
+      MEILISEARCH_URL: http://meilisearch:7700
+      MEILISEARCH_API_KEY: ${MEILISEARCH_API_KEY:-your-meilisearch-key}
+    ports:
+      - "3002:3000"
+    depends_on:
+      - control-plane
+      - meilisearch
+    networks:
+      - hosting-panel
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: hosting-panel-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - control-plane
+      - client-portal
+      - helpdesk
+    networks:
+      - hosting-panel
+
+volumes:
+  postgres_data:
+  redis_data:
+  meilisearch_data:
+
+networks:
+  hosting-panel:
+    driver: bridge
